@@ -103,6 +103,13 @@ with Afford's decisions applied. No paths or operationIds changed. What did:
   param would work as well but isn't standard REST practice for representation
   selection.
 
+## Client experience
+
+[client-experience.md](client-experience.md) walks a single shopper through the
+flow — browse, add to cart, checkout, pay, track — as both an agent client and a
+human/chat client, showing how the same operations return different shapes at each
+step.
+
 ## Representation examples
 
 Two representations of the same `Order`, same underlying state (`status = Paid`),
