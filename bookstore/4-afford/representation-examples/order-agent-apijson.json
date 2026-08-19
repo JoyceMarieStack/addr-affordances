@@ -1,0 +1,15 @@
+{
+  "data": {
+    "type": "orders",
+    "id": "98765",
+    "attributes": {
+      "status": "Paid",
+      "cartTotal": 3499
+    },
+    "links": {
+      "self": { "href": "/orders/98765" },
+      "cancelOrder": { "href": "/orders/98765/cancel", "method": "POST" },
+      "viewOrder": { "href": "/orders/98765", "method": "GET" }
+    }
+  }
+}

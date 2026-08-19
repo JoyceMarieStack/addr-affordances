@@ -28,8 +28,8 @@ payment and cancellation; an `Order` in `Shipped` status affords neither.
   that satisfies it.
 - **Agent** — a program (or an LLM driving the API directly, not through a chat surface)
   needs to reason over *all* valid transitions and pick one deterministically, without
-  guessing at intent. This ships as the full **`_links`** set, HAL-style, one entry per
-  reachable operation, keyed by `rel`.
+  guessing at intent. This ships as the full **`links`** set, JSON:API-style, one entry
+  per reachable operation, keyed by `rel`.
 
 Same underlying decision — same table — one more column telling you which shape a given
 row ships as.
@@ -38,31 +38,31 @@ row ships as.
 
 | Resource / State | Just Completed | Condition | Affordance (rel) | Points To (Operation) | Consumer | Ships As |
 |---|---|---|---|---|---|---|
-| Book | `ListBooks` / `searchBooks` | any | `viewDetails` | `ViewBookDetails` | agent | `_links` |
+| Book | `ListBooks` / `searchBooks` | any | `viewDetails` | `ViewBookDetails` | agent | `links` |
 | Book | `ListBooks` / `searchBooks` | any | *(none — too many equally-relevant books to pick one)* | — | human | *(no suggestion field)* |
-| Book | `ViewBookDetails` | any | `addToCart` | `AddBookToCart` (creates cart if none exists) | agent | `_links` |
+| Book | `ViewBookDetails` | any | `addToCart` | `AddBookToCart` (creates cart if none exists) | agent | `links` |
 | Book | `ViewBookDetails` | any | "Add to cart" | `AddBookToCart` | human | `suggestedAction` |
-| Book | `ViewBookDetails` | `authors` present | `viewAuthor` | `getAuthorDetails` | agent | `_links` |
-| Cart | `CreateNewCart` / `AddBookToCart` | `status = Active`, `cartItems` empty | `addItem` | `AddBookToCart` | agent | `_links` |
+| Book | `ViewBookDetails` | `authors` present | `viewAuthor` | `getAuthorDetails` | agent | `links` |
+| Cart | `CreateNewCart` / `AddBookToCart` | `status = Active`, `cartItems` empty | `addItem` | `AddBookToCart` | agent | `links` |
 | Cart | `CreateNewCart` / `AddBookToCart` | `status = Active`, `cartItems` empty | "Keep browsing" | `ListBooks` | human | `suggestedAction` |
-| Cart | `AddBookToCart` / `ModifyBookInCart` | `status = Active`, `cartItems` non-empty | `addItem`, `removeItem`, `modifyItem`, `clearCart`, `checkout` | `AddBookToCart`, `RemoveBookFromCart`, `ModifyBookInCart`, `clearCart`, `CreateNewOrder` | agent | `_links` |
+| Cart | `AddBookToCart` / `ModifyBookInCart` | `status = Active`, `cartItems` non-empty | `addItem`, `removeItem`, `modifyItem`, `clearCart`, `checkout` | `AddBookToCart`, `RemoveBookFromCart`, `ModifyBookInCart`, `clearCart`, `CreateNewOrder` | agent | `links` |
 | Cart | `AddBookToCart` / `ModifyBookInCart` | `status = Active`, `cartItems` non-empty | "Checkout" | `CreateNewOrder` | human | `suggestedAction` |
-| Cart | `CreateNewOrder` (cart converted) | `status = Converted` | `viewOrder` | `ViewOrderDetails` | agent | `_links` |
+| Cart | `CreateNewOrder` (cart converted) | `status = Converted` | `viewOrder` | `ViewOrderDetails` | agent | `links` |
 | Cart | `CreateNewOrder` (cart converted) | `status = Converted` | "View your order" | `ViewOrderDetails` | human | `suggestedAction` |
-| Cart | *(inactivity timeout)* | `status = Abandoned` | *(none)* | — | agent | `_links` *(empty)* |
-| Order | `CreateNewOrder` | `status = New` | `submitPayment`, `cancelOrder` | `SubmitPaymentDetailsForOrder`, `CancelOrder` | agent | `_links` |
+| Cart | *(inactivity timeout)* | `status = Abandoned` | *(none)* | — | agent | `links` *(empty)* |
+| Order | `CreateNewOrder` | `status = New` | `submitPayment`, `cancelOrder` | `SubmitPaymentDetailsForOrder`, `CancelOrder` | agent | `links` |
 | Order | `CreateNewOrder` | `status = New` | "Pay now" | `SubmitPaymentDetailsForOrder` | human | `suggestedAction` |
-| Order | `SubmitPaymentDetailsForOrder` | `paymentStatus = Failed`, order `status = New` | `retryPayment`, `cancelOrder` | `SubmitPaymentDetailsForOrder`, `CancelOrder` | agent | `_links` |
+| Order | `SubmitPaymentDetailsForOrder` | `paymentStatus = Failed`, order `status = New` | `retryPayment`, `cancelOrder` | `SubmitPaymentDetailsForOrder`, `CancelOrder` | agent | `links` |
 | Order | `SubmitPaymentDetailsForOrder` | `paymentStatus = Failed`, order `status = New` | "Try a different card" | `SubmitPaymentDetailsForOrder` | human | `suggestedAction` |
-| Order | `SubmitPaymentDetailsForOrder` | `paymentStatus = Success`, order `status = Paid` | `cancelOrder`, `viewOrder` | `CancelOrder`, `ViewOrderDetails` | agent | `_links` |
+| Order | `SubmitPaymentDetailsForOrder` | `paymentStatus = Success`, order `status = Paid` | `cancelOrder`, `viewOrder` | `CancelOrder`, `ViewOrderDetails` | agent | `links` |
 | Order | `SubmitPaymentDetailsForOrder` | `paymentStatus = Success`, order `status = Paid` | "Track your order" | `ViewOrderDetails` | human | `suggestedAction` |
-| Order | `ViewOrderDetails` | `status ∈ {Preparing, Prepared}` | `cancelOrder`, `viewOrder` | `CancelOrder`, `ViewOrderDetails` | agent | `_links` |
+| Order | `ViewOrderDetails` | `status ∈ {Preparing, Prepared}` | `cancelOrder`, `viewOrder` | `CancelOrder`, `ViewOrderDetails` | agent | `links` |
 | Order | `ViewOrderDetails` | `status ∈ {Preparing, Prepared}` | *(none — cancellation is a support action, not the customer's primary next step)* | — | human | *(no suggestion field)* |
-| Order | `ViewOrderDetails` | `status = Shipped` | `viewOrder` | `ViewOrderDetails` | agent | `_links` (self only) |
+| Order | `ViewOrderDetails` | `status = Shipped` | `viewOrder` | `ViewOrderDetails` | agent | `links` (self only) |
 | Order | `ViewOrderDetails` | `status = Shipped` | "Track shipment" | *(external carrier tracking, out of scope)* | human | `suggestedAction` |
-| Order | `ViewOrderDetails` | `status = Received` | *(none — terminal, success)* | — | agent | `_links` (self only) |
+| Order | `ViewOrderDetails` | `status = Received` | *(none — terminal, success)* | — | agent | `links` (self only) |
 | Order | `ViewOrderDetails` | `status = Received` | "Browse new arrivals" | `ListBooks` | human | `suggestedAction` |
-| Order | `ViewOrderDetails` / `CancelOrder` | `status = Cancelled` | *(none — terminal)* | — | agent | `_links` (self only) |
+| Order | `ViewOrderDetails` / `CancelOrder` | `status = Cancelled` | *(none — terminal)* | — | agent | `links` (self only) |
 | Order | `ViewOrderDetails` / `CancelOrder` | `status = Cancelled` | "Start a new order" | `ListBooks` | human | `suggestedAction` |
 
 Notes on reading the table:
@@ -84,14 +84,16 @@ Notes on reading the table:
 ## Representation examples
 
 Two representations of the same `Order`, same underlying state (`status = Paid`),
-shaped for the two consumers described above:
+shaped for the two consumers described above, both built on the JSON:API-style
+envelope from
+[3a-design-rest/representation-examples/book-apijson.json](../3a-design-rest/representation-examples/book-apijson.json):
 
-- [order-agent-hal.json](representation-examples/order-agent-hal.json) — full `_links`
-  rel set, for a program deciding what to do next
-- [order-human-suggestion.json](representation-examples/order-human-suggestion.json) —
+- [order-agent-apijson.json](representation-examples/order-agent-apijson.json) — full
+  `links` rel set, for a program deciding what to do next
+- [order-human-suggestion-apijson.json](representation-examples/order-human-suggestion-apijson.json) —
   single `suggestedAction`, for a chat surface or human-facing UI
 
-Compare against the existing REST representation styles in
-[3a-design-rest/representation-examples](../3a-design-rest/representation-examples/) —
-Afford doesn't replace those serialization choices, it adds a state-driven layer on top
-of whichever one you pick.
+Afford doesn't replace the serialization choice made in Design — it adds a
+state-driven layer on top of whichever envelope you pick. This example standardizes
+on the JSON:API-style format; the same table would drive identical content into a
+HAL or Uber envelope instead.

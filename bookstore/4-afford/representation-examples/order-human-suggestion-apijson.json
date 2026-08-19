@@ -1,0 +1,15 @@
+{
+  "data": {
+    "type": "orders",
+    "id": "98765",
+    "attributes": {
+      "status": "Paid",
+      "cartTotal": 3499
+    },
+    "suggestedAction": {
+      "label": "Track your order",
+      "href": "/orders/98765",
+      "method": "GET"
+    }
+  }
+}
