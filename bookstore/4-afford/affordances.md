@@ -2,42 +2,18 @@
 
 NOTE: I think I'm confusing a few things here with the intent design and the affordances..intent comes first.....I think what this shows ....here's what happens when you try to bolt affordances onto a data-model-shaped API — you immediately see the operations are too granular which is an issue for agents having to spawn a bunch of requests....when each one is not atomic....
 
-**Where the note above is right:** intent-shaping *is* a Design-phase decision (which
-operations exist, how coarse or fine they are), and Afford is applied *after* that —
-it decides what's reachable next given whatever operations Design already produced.
-Get that ordering backwards and Afford has nothing to work with yet. Writing the
-affordance table for the cart/order flow above is what surfaced that `AddBookToCart`
-/ `RemoveBookFromCart` / `ModifyBookInCart` / `CreateNewOrder` / `SubmitPaymentDetailsForOrder`
-is still five separate non-atomic calls for an agent that already knows what it wants
-to buy — that's a real, correct diagnosis.
+I was thinking "given the state a resource is in right now, what should the caller be able to do next, and who is the caller?"  
 
-**Where it's easy to over-read that observation, though:**
-
-- Afford didn't *cause* the granularity problem, and fixing Afford wouldn't fix it
-  either. The operations were already too fine-grained for an agent before any
-  `links`/`suggestedAction` field existed — Afford just makes an existing Design
-  decision visible by forcing every state transition to be enumerated explicitly.
-  It's a diagnostic side-effect, not a defect in the affordance approach itself.
-- Afford doesn't reduce call count, and was never going to. Only Define/Design can
-  do that, by collapsing `CreateNewCart` → `AddBookToCart`(×N) → `CreateNewOrder` →
-  `SubmitPaymentDetailsForOrder` into a single atomic `PlaceOrder`/`place_order`
-  intent. Afford's job stays the same either way: given whatever operations exist,
-  say which are currently valid and for whom.
-- Collapsing to `PlaceOrder` doesn't make Afford unnecessary — it makes the
-  *table* shrink. `Order/New → {submitPayment, cancelOrder}` disappears entirely,
-  because an order created via `PlaceOrder` is already `Paid`. What's left is
-  `Paid → {cancelOrder, viewOrder}` and the terminal states — Afford still earns
-  its keep on the states that survive the collapse, it just has fewer rows to cover.
+And how could I spec that thinking out.
 
 **The corrected order of operations:** Define/Design decide operation shape and
 count first (intent-first, atomic where a business outcome is single-shot) → Afford
-decides, given that shape, what's reachable next and for which consumer → Refine
-checks token/input efficiency. If the affordance table sprawls or feels like it's
+decides, given that shape, what's reachable next and for which consumer. 
+
+If the affordance table sprawls or feels like it's
 compensating for something, that's a signal to go back and revisit Design's
 granularity — not evidence that affordances is the wrong tool.
 
-ADDR becomes ADDAR: **Align → Define → Design → Afford → Refine**. Afford sits between
-Design and Refine, and answers one question the operation table in
 [3a-design-rest/ShoppingAPI.design.md](../3a-design-rest/ShoppingAPI.design.md) doesn't:
 *given the state a resource is in right now, what should the caller be able to do next,
 and who is the caller?*
