@@ -1,10 +1,20 @@
 # Afford — Bookstore Example
 
-NOTE: I think I'm confusing a few things here with the intent design and the affordances..intent comes first.....I think what this shows ....here's what happens when you try to bolt affordances onto a data-model-shaped API — you immediately see the operations are too granular which is an issue for agents having to spawn a bunch of requests....when each one is not atomic....
+Joyce Thinking in Real Time : I think I'm confusing a few things here with the intent design and the affordances..intent comes first.....I think what this example shows ....here's what happens when you try to bolt affordances onto a data-model-shaped API — you immediately see the operations are too granular which is an issue for agents having to spawn a bunch of requests....when each one is not atomic....
 
 I was thinking "given the state a resource is in right now, what should the caller be able to do next, and who is the caller?"  
 
 And how could I spec that thinking out.
+
+Intent design answers "what verb does this expose" (Do,Know/etc). 
+
+The affordance layer would answer...."given the current state and permissions, which of those verbs can actually be called"
+
+e.g. get_author() would return "available_actions: get_coauthor_network(), "comapre-researchers()" 
+
+
+
+
 
 **The corrected order of operations:** Define/Design decide operation shape and
 count first (intent-first, atomic where a business outcome is single-shot) → Afford
