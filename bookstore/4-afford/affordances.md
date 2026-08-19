@@ -77,19 +77,3 @@ row ships as.
 | Order | `ViewOrderDetails` / `CancelOrder` | `status = Cancelled` | *(none — terminal)* | — | agent | `links` (self only) |
 | Order | `ViewOrderDetails` / `CancelOrder` | `status = Cancelled` | "Start a new order" | `ListBooks` | human | `suggestedAction` |
 
-Notes on reading the table:
-
-- A row with no affordance isn't a gap — it's a design decision. Terminal states
-  (`Received`, `Cancelled`) and states with too many equally valid next steps (a search
-  results page) are supposed to come back empty for at least one consumer.
-- `cancelOrder` disappears once `status = Shipped`, matching the constraint already
-  documented on `CancelOrder` in
-  [Order-Creation-API-REST.oas3.yaml](../3a-design-rest/Order-Creation-API-REST.oas3.yaml):
-  refund path if paid, hard-cancel if not — neither applies once the order has left the
-  warehouse.
-- The human suggestion is deliberately narrower than the agent's link set in every case —
-  it's a curated recommendation ("do this one thing"), not a filtered copy of the full
-  set. `CancelOrder` in a `Preparing` state is a legitimate agent-reachable transition
-  but a bad thing to nudge a customer toward, so it's omitted from `suggestedAction`
-  entirely.
-
