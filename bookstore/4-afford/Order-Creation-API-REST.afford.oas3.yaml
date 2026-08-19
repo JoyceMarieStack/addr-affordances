@@ -1,0 +1,1092 @@
+openapi: 3.0.0
+info:
+  title: Bookstore Shopping Cart API - REST Example (Afford variant)
+  description: |
+    This is the Design-phase spec
+    ([Order-Creation-API-REST.oas3.yaml](../3a-design-rest/Order-Creation-API-REST.oas3.yaml))
+    with the Afford phase applied. Nothing in `paths` changed — no new endpoints, no new
+    operationIds. What changed:
+
+    1. Every representation schema that used to *describe* its hypermedia links in prose
+       (`description: "...the following hypermedia links are offered..."`) now carries
+       them as real, validatable schema: a `links` object for agent consumers, a
+       `suggestedAction` object for human consumers. See
+       [affordances.md](affordances.md) for the table these were derived from — every
+       rel, condition, and label below traces back to a row in that table.
+    2. Responses that return an affordance-bearing resource now content-negotiate on
+       media type instead of returning one fixed shape: `application/vnd.bookstore.agent+json`
+       (full `links` rel set) vs. `application/vnd.bookstore.human+json` (single
+       `suggestedAction`, when the table has one for that state). This is the open
+       question flagged when Afford was applied to Design — OAS can't conditionally
+       shrink a schema by caller identity, so the shape has to be selected via
+       something the request carries. Media type via `Accept` was chosen here over a
+       custom header or query param because it's what content negotiation already
+       exists for.
+
+    The population of `links`/`suggestedAction` per resource *state* (e.g. which rels
+    appear when `orderStatus = Shipped`) isn't something OAS can express structurally —
+    it's runtime behavior driven by the affordance table. The schema `description`
+    fields below spell out the state → content mapping so an implementer has one place
+    to check it against affordances.md.
+
+    Original Design-phase description follows:
+
+    The Bookstore Example API supports the shopping experience of an online bookstore. The API includes the following operations by capability:
+
+    | Capability          | Operation                               |
+    |---------------------|-----------------------------------------|
+    | List Recent Books   | List Recent Books In Store              |
+    | List Recent Books   | Search for a book by topic or keyword   |
+    | List Recent Books   | View Book Details                       |
+    | Place an Order      | Create Cart                             |
+    | Place an Order      | Add Book to Cart                        |
+    | Place an Order      | Remove Book from the Cart               |
+    | Place an Order      | Modify Book in Cart                     |
+    | Place an Order      | View Cart with Totals                   |
+
+  contact: {}
+  version: '1.0'
+servers:
+- url: https://{defaultHost}
+  variables:
+    defaultHost:
+      default: www.example.com/enterprise/shop
+paths:
+  /books:
+    get:
+      tags:
+      - Books
+      summary: ListBooks
+      description: "Provides a paginated list of books based on the search criteria provided. If no search criteria is provided, books are returned in alphabetical order. \n"
+      operationId: ListBooks
+      parameters:
+      - name: q
+        in: query
+        description: A query string to use for filtering books by title and description. If not provided, all available books will be listed. Note that the query argument 'q' is a common standard for general search queries
+        style: form
+        explode: true
+        schema:
+          type: string
+      - name: daysSinceBookReleased
+        in: query
+        description: A query string to use for filtering books released within the last number of days, e.g. 7 means in the last 7 days. The default value of null indicates no time filtering is applied. Maximum number of days to filter is 30 days since today
+        style: form
+        explode: true
+        schema:
+          type: integer
+          format: int32
+      - name: offset
+        in: query
+        description: A offset from which the list of books are retrieved, where an offset of 0 means the first page of results. Default is an offset of 0
+        style: form
+        explode: true
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+      - name: limit
+        in: query
+        description: Number of records to be included in API call, defaulting to 25 records at a time if not provided
+        style: form
+        explode: true
+        schema:
+          maximum: 100
+          minimum: 1
+          type: integer
+          format: int32
+          default: 25
+      - name: Authorization
+        in: header
+        description: An OAuth 2.0 access token that authorizes your app to call this endpoint. For more information on how to obtain an access token, go to the "Getting Access" section.
+        required: true
+        style: simple
+        schema:
+          type: string
+      - name: Client-Id
+        in: header
+        description: Client id consuming the api
+        required: true
+        style: simple
+        schema:
+          type: string
+      - name: Accept
+        in: header
+        description: >
+          Selects the representation shape: `application/vnd.bookstore.agent+json` for
+          the full rel-typed `links` set, `application/vnd.bookstore.human+json` for a
+          single curated `suggestedAction` (omitted entirely for this operation — see
+          the `links` description on `BookSummary` for why).
+        required: true
+        style: simple
+        schema:
+          type: string
+          enum:
+          - application/vnd.bookstore.agent+json
+          - application/vnd.bookstore.human+json
+      - name: Content-Type
+        in: header
+        description: Content the client sends in request e.g. application/json.
+        required: true
+        style: simple
+        schema:
+          type: string
+      - name: Client-Correlation-Id
+        in: header
+        description: It is an optional field that clients can provide to track traffic across different APIs. Clients who utilize this are responsible for generating the value, guaranteeing uniqueness, and providing it as a Header in every request.
+        style: simple
+        schema:
+          type: string
+      responses:
+        200:
+          description: Success
+          headers: {}
+          content:
+            application/vnd.bookstore.agent+json:
+              schema:
+                $ref: '#/components/schemas/ListBooksResponseAgent'
+            application/vnd.bookstore.human+json:
+              schema:
+                $ref: '#/components/schemas/ListBooksResponse'
+        401:
+          description: Request failed, This is the response received when a request is made with invalid API credentials
+        403:
+          description: Request failed, This is the response received when a request is made with valid API credentials towards an API endpoint or resource you do not have access to.
+      deprecated: false
+  /books/{bookId}:
+    get:
+      tags:
+      - Books
+      summary: ViewBookDetails
+      description: "Retrieves the full details about a book by the provided bookId. Details provided include: title, ISBN, plain text description, and the list of authors \n"
+      operationId: ViewBookDetails
+      parameters:
+      - name: bookId
+        in: path
+        description: The book identifier to be retrieved
+        required: true
+        style: simple
+        schema:
+          type: string
+      - name: Accept
+        in: header
+        description: Selects the representation shape — see the description on the `ListBooks` operation.
+        required: true
+        style: simple
+        schema:
+          type: string
+          enum:
+          - application/vnd.bookstore.agent+json
+          - application/vnd.bookstore.human+json
+      responses:
+        200:
+          description: Success
+          headers: {}
+          content:
+            application/vnd.bookstore.agent+json:
+              schema:
+                $ref: '#/components/schemas/BookDetailsAgent'
+            application/vnd.bookstore.human+json:
+              schema:
+                $ref: '#/components/schemas/BookDetailsHuman'
+        401:
+          description: Request failed, This is the response received when a request is made with invalid API credentials
+        403:
+          description: Request failed, This is the response received when a request is made with valid API credentials towards an API endpoint or resource you do not have access to.
+        404:
+          description: Request failed, This is the response received when a request is made and there no data is found for the bookId path parameter.
+      deprecated: false
+  /carts/{cartId}:
+    get:
+      tags:
+      - Carts
+      summary: ViewCartDetails
+      description: >
+        Retrieves the full details about a cart by the provided identifier. Details provided include: the status of the cart, the list of books + quantities, and the total cost
+      operationId: ViewCartDetails
+      parameters:
+      - name: cartId
+        in: path
+        description: The cart identifier to be retrieved
+        required: true
+        style: simple
+        schema:
+          type: string
+      - name: Accept
+        in: header
+        description: Selects the representation shape — see the description on the `ListBooks` operation.
+        required: true
+        style: simple
+        schema:
+          type: string
+          enum:
+          - application/vnd.bookstore.agent+json
+          - application/vnd.bookstore.human+json
+      responses:
+        200:
+          description: Success
+          headers: {}
+          content:
+            application/vnd.bookstore.agent+json:
+              schema:
+                $ref: '#/components/schemas/CartDetailsAgent'
+            application/vnd.bookstore.human+json:
+              schema:
+                $ref: '#/components/schemas/CartDetailsHuman'
+        401:
+          description: Request failed, This is the response received when a request is made with invalid API credentials
+        403:
+          description: Request failed, This is the response received when a request is made with valid API credentials towards an API endpoint or resource you do not have access to.
+        404:
+          description: Request failed, This is the response received when a request is made and there no data is found for the path parameter.
+      deprecated: false
+  /orders/{orderId}:
+    get:
+      tags:
+      - Orders
+      summary: ViewOrderDetails
+      description: >
+        Retrieves the full details about an order by the provided orderId. Details provided include: the status of the order, the list of books + quantities, and the total cost
+      operationId: ViewOrderDetails
+      parameters:
+      - name: orderId
+        in: path
+        description: The order identifier to be retrieved
+        required: true
+        style: simple
+        schema:
+          type: string
+      - name: Accept
+        in: header
+        description: Selects the representation shape — see the description on the `ListBooks` operation.
+        required: true
+        style: simple
+        schema:
+          type: string
+          enum:
+          - application/vnd.bookstore.agent+json
+          - application/vnd.bookstore.human+json
+      responses:
+        200:
+          description: Success
+          headers: {}
+          content:
+            application/vnd.bookstore.agent+json:
+              schema:
+                $ref: '#/components/schemas/OrderDetailsAgent'
+            application/vnd.bookstore.human+json:
+              schema:
+                $ref: '#/components/schemas/OrderDetailsHuman'
+        401:
+          description: Request failed, This is the response received when a request is made with invalid API credentials
+        403:
+          description: Request failed, This is the response received when a request is made with valid API credentials towards an API endpoint or resource you do not have access to.
+        404:
+          description: Request failed, This is the response received when a request is made and there no data is found for the path parameter.
+      deprecated: false
+  /carts:
+    post:
+      tags:
+      - Carts
+      summary: CreateNewCart
+      description: "Creates a new cart with a single item to begin the shopping process. The workflow allows the customer to add a quantity of books to the cart as cart items. These items may be manipulated directly prior to creating an order, similar to any online shopping cart experience. Once ready, use the CreateOrder operation to convert the cart into an order and apply payment.\n      \n"
+      operationId: CreateNewCart
+      parameters:
+      - name: Accept
+        in: header
+        description: Selects the representation shape — see the description on the `ListBooks` operation.
+        required: true
+        style: simple
+        schema:
+          type: string
+          enum:
+          - application/vnd.bookstore.agent+json
+          - application/vnd.bookstore.human+json
+      requestBody:
+        description: ''
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewCart'
+        required: true
+      responses:
+        201:
+          description: Created
+          headers:
+            Location:
+              description: Specifies the URL of the newly created resource
+              content:
+                text/plain:
+                  schema:
+                    type: string
+          content:
+            application/vnd.bookstore.agent+json:
+              schema:
+                $ref: '#/components/schemas/CartDetailsAgent'
+            application/vnd.bookstore.human+json:
+              schema:
+                $ref: '#/components/schemas/CartDetailsHuman'
+        400:
+          description: Request failed, refer to Common HTTP 400 Response Body for details
+        401:
+          description: Request failed, This is the response received when a request is made with invalid API credentials
+        403:
+          description: Request failed, This is the response received when a request is made with valid API credentials towards an API endpoint or resource you do not have access to.
+        500:
+          description: General server error, This is the response received when a request is made towards API but the API could not fulfill the request due to factors on the API side.
+      deprecated: false
+  /carts/{cartId}/items:
+    post:
+      tags:
+      - CartItems
+      summary: AddBookToCart
+      description: >
+        Adds a new Book to an existing Cart as a CartItem, which includes the quantity of books desired. Recalculates the cart total, and returns the updated cart details
+      operationId: AddBookToCart
+      parameters:
+      - name: cartId
+        in: path
+        description: The cart identifier to be retrieved
+        required: true
+        style: simple
+        schema:
+          type: string
+      - name: Accept
+        in: header
+        description: Selects the representation shape — see the description on the `ListBooks` operation.
+        required: true
+        style: simple
+        schema:
+          type: string
+          enum:
+          - application/vnd.bookstore.agent+json
+          - application/vnd.bookstore.human+json
+      requestBody:
+        description: ''
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewCartItem'
+        required: false
+      responses:
+        201:
+          description: Created
+          headers:
+            Location:
+              description: Specifies the URL of the newly created resource
+              content:
+                text/plain:
+                  schema:
+                    type: string
+          content:
+            application/vnd.bookstore.agent+json:
+              schema:
+                $ref: '#/components/schemas/CartDetailsAgent'
+            application/vnd.bookstore.human+json:
+              schema:
+                $ref: '#/components/schemas/CartDetailsHuman'
+        401:
+          description: Request failed, This is the response received when a request is made with invalid API credentials
+        403:
+          description: Request failed, This is the response received when a request is made with valid API credentials towards an API endpoint or resource you do not have access to.
+        404:
+          description: Request failed, This is the response received when a request is made and there no data is found for the path parameter.
+        409:
+          description: Request failed due to the cart being marked as archived once it has been converted to an order and no longer editable
+      deprecated: false
+  /carts/{cartId}/items/{cartItemId}:
+    patch:
+      tags:
+      - CartItems
+      summary: ModifyBookInCart
+      description: >
+        Modifies the quantity of a CartItem in an existing Cart, recalculates the cart total, and returns the updated cart details.
+      operationId: ModifyBookInCart
+      parameters:
+      - name: cartId
+        in: path
+        description: The Cart identifier to be retrieved
+        required: true
+        style: simple
+        schema:
+          type: string
+      - name: cartItemId
+        in: path
+        description: The CartItem identifier to be retrieved
+        required: true
+        style: simple
+        schema:
+          type: string
+      - name: Accept
+        in: header
+        description: Selects the representation shape — see the description on the `ListBooks` operation.
+        required: true
+        style: simple
+        schema:
+          type: string
+          enum:
+          - application/vnd.bookstore.agent+json
+          - application/vnd.bookstore.human+json
+      requestBody:
+        description: ''
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModifyCartItem'
+        required: false
+      responses:
+        200:
+          description: Modified the cart item successfully. The updated cart is returned, including an updated cart total
+          headers: {}
+          content:
+            application/vnd.bookstore.agent+json:
+              schema:
+                $ref: '#/components/schemas/CartDetailsAgent'
+            application/vnd.bookstore.human+json:
+              schema:
+                $ref: '#/components/schemas/CartDetailsHuman'
+        401:
+          description: Request failed, This is the response received when a request is made with invalid API credentials
+        403:
+          description: Request failed, This is the response received when a request is made with valid API credentials towards an API endpoint or resource you do not have access to.
+        404:
+          description: Request failed, This is the response received when a request is made and there no data is found for the path parameter.
+        409:
+          description: Request failed due to the cart being marked as archived once it has been converted to an order and no longer editable
+      deprecated: false
+    delete:
+      tags:
+      - CartItems
+      summary: RemoveBookFromCart
+      description: "Removes a CartItem from an existing Cart, recalculates the cart total, and returns the updated cart details. Please note that since the cart has been recalculated and returned, the response code for a successful deletion of the cart item is a 200 rather than the default of a 204 when there is no response payload. \n"
+      operationId: RemoveBookFromCart
+      parameters:
+      - name: cartId
+        in: path
+        description: The Cart identifier to be retrieved
+        required: true
+        style: simple
+        schema:
+          type: string
+      - name: cartItemId
+        in: path
+        description: The CartItem identifier to be retrieved
+        required: true
+        style: simple
+        schema:
+          type: string
+      - name: Accept
+        in: header
+        description: Selects the representation shape — see the description on the `ListBooks` operation.
+        required: true
+        style: simple
+        schema:
+          type: string
+          enum:
+          - application/vnd.bookstore.agent+json
+          - application/vnd.bookstore.human+json
+      responses:
+        200:
+          description: Deleted the cart item successfully
+          headers: {}
+          content:
+            application/vnd.bookstore.agent+json:
+              schema:
+                $ref: '#/components/schemas/CartDetailsAgent'
+            application/vnd.bookstore.human+json:
+              schema:
+                $ref: '#/components/schemas/CartDetailsHuman'
+        401:
+          description: Request failed, This is the response received when a request is made with invalid API credentials
+        403:
+          description: Request failed, This is the response received when a request is made with valid API credentials towards an API endpoint or resource you do not have access to.
+        404:
+          description: Request failed, This is the response received when a request is made and there no data is found for the path parameter.
+        409:
+          description: Request failed due to the cart being marked as archived once it has been converted to an order and no longer editable
+      deprecated: false
+  /orders:
+    post:
+      tags:
+      - Orders
+      summary: CreateNewOrder
+      description: "Creates a new order based upon an existing cart's contents. The status is initially set to 'New' until full payment has been applied. \n      \n"
+      operationId: CreateNewOrder
+      parameters:
+      - name: Accept
+        in: header
+        description: Selects the representation shape — see the description on the `ListBooks` operation.
+        required: true
+        style: simple
+        schema:
+          type: string
+          enum:
+          - application/vnd.bookstore.agent+json
+          - application/vnd.bookstore.human+json
+      requestBody:
+        description: ''
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewOrder'
+        required: true
+      responses:
+        201:
+          description: Created
+          headers:
+            Location:
+              description: Specifies the URL of the newly created resource
+              content:
+                text/plain:
+                  schema:
+                    type: string
+          content:
+            application/vnd.bookstore.agent+json:
+              schema:
+                $ref: '#/components/schemas/OrderDetailsAgent'
+            application/vnd.bookstore.human+json:
+              schema:
+                $ref: '#/components/schemas/OrderDetailsHuman'
+        400:
+          description: Request failed, refer to Common HTTP 400 Response Body for details
+        401:
+          description: Request failed, This is the response received when a request is made with invalid API credentials
+        403:
+          description: Request failed, This is the response received when a request is made with valid API credentials towards an API endpoint or resource you do not have access to.
+        500:
+          description: General server error, This is the response received when a request is made towards API but the API could not fulfill the request due to factors on the API side.
+      deprecated: false
+  /orders/{orderId}/cancel:
+    post:
+      tags:
+      - Books
+      summary: CancelOrder
+      description: "Attempts to cancel an order. If the order is in a valid state for a refund, a refund will be scheduled. If the order hasn't been paid for, the order will be marked as cancelled and may no longer be changed.\n\nNote that this could be used in a PATCH to set the status of an order to cancelled. However, providing this functional endpoint allows for different access control to this endpoint (path + verb), e.g. support staff only, whereas using a PATCH would require enforcing access controls within the endpoint implementation itself. \n\nPer the Afford table, this operation stops being offered as a `cancelOrder` link/suggestion once `orderStatus = Shipped` — refund-if-paid or hard-cancel-if-not no longer applies once the order has left the warehouse. The endpoint itself still exists for support/back-office use; it's just no longer surfaced to the customer-facing consumer once that state is reached.\n"
+      operationId: CancelOrder
+      parameters:
+      - name: orderId
+        in: path
+        description: The order identifier to be retrieved
+        required: true
+        style: simple
+        schema:
+          type: string
+      - name: Accept
+        in: header
+        description: Selects the representation shape — see the description on the `ListBooks` operation.
+        required: true
+        style: simple
+        schema:
+          type: string
+          enum:
+          - application/vnd.bookstore.agent+json
+          - application/vnd.bookstore.human+json
+      responses:
+        200:
+          description: Success
+          headers: {}
+          content:
+            application/vnd.bookstore.agent+json:
+              schema:
+                $ref: '#/components/schemas/OrderDetailsAgent'
+            application/vnd.bookstore.human+json:
+              schema:
+                $ref: '#/components/schemas/OrderDetailsHuman'
+        401:
+          description: Request failed, This is the response received when a request is made with invalid API credentials
+        403:
+          description: Request failed, This is the response received when a request is made with valid API credentials towards an API endpoint or resource you do not have access to.
+        404:
+          description: Request failed, This is the response received when a request is made and there no data is found for the path parameter.
+      deprecated: false
+  /orders/{orderId}/payments:
+    post:
+      tags:
+      - OrderPayments
+      summary: SubmitPaymentDetailsForOrder
+      description: >
+        Adds a partial or full credit card payment to the Order. Once verified, the payment will be assigned a status of 'success' or 'failed' based on the transaction result and returned
+      operationId: SubmitPaymentDetailsForOrder
+      parameters:
+      - name: orderId
+        in: path
+        description: The order identifier to be retrieved
+        required: true
+        style: simple
+        schema:
+          type: string
+      - name: Accept
+        in: header
+        description: Selects the representation shape — see the description on the `ListBooks` operation.
+        required: true
+        style: simple
+        schema:
+          type: string
+          enum:
+          - application/vnd.bookstore.agent+json
+          - application/vnd.bookstore.human+json
+      requestBody:
+        description: ''
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewOrderPayment'
+        required: false
+      responses:
+        201:
+          description: Created
+          headers:
+            Location:
+              description: Specifies the URL of the newly created resource
+              content:
+                text/plain:
+                  schema:
+                    type: string
+          content:
+            application/vnd.bookstore.agent+json:
+              schema:
+                $ref: '#/components/schemas/OrderPaymentDetailsAgent'
+            application/vnd.bookstore.human+json:
+              schema:
+                $ref: '#/components/schemas/OrderPaymentDetailsHuman'
+        401:
+          description: Request failed, This is the response received when a request is made with invalid API credentials
+        403:
+          description: Request failed, This is the response received when a request is made with valid API credentials towards an API endpoint or resource you do not have access to.
+        404:
+          description: Request failed, This is the response received when a request is made and there no data is found for the path parameter.
+      deprecated: false
+components:
+  schemas:
+    Link:
+      title: Link
+      type: object
+      required:
+      - href
+      - method
+      properties:
+        href:
+          type: string
+          description: The URL to invoke
+        method:
+          type: string
+          description: The HTTP method to use, e.g. GET, POST, PATCH, DELETE
+    Links:
+      title: Links
+      type: object
+      description: >
+        Rel-typed link set for agent consumers, HAL/JSON:API-style — one entry per
+        operation reachable from the resource's current state. `self` is always
+        present; which action rels join it is state-gated and documented on each
+        schema that includes this property. See affordances.md for the full table.
+      additionalProperties:
+        $ref: '#/components/schemas/Link'
+    SuggestedAction:
+      title: SuggestedAction
+      type: object
+      description: >
+        Single curated next step for human/chat consumers — a plain-language label
+        plus the one URL/method that satisfies it. Deliberately narrower than `Links`
+        for the same state: it's a recommendation, not a filtered copy of the full
+        rel set. Some states have none at all (terminal states, or states with too
+        many equally valid next steps) — in those cases this property is absent.
+      required:
+      - label
+      - href
+      - method
+      properties:
+        label:
+          type: string
+          description: Plain-language description of the next step, e.g. "Pay now"
+        href:
+          type: string
+          description: The URL to invoke
+        method:
+          type: string
+          description: The HTTP method to use
+    ListBooksResponse:
+      title: ListBooksResponse
+      type: object
+      properties:
+        books:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookSummary'
+          description: ''
+      description: >
+        A list of book summaries as a result of a list or filter request. Human
+        consumers get this shape unaugmented — per the affordance table, a results
+        list has too many equally-relevant books to pick one `suggestedAction` from,
+        so no suggestion field is offered at this level.
+    ListBooksResponseAgent:
+      title: ListBooksResponseAgent
+      type: object
+      properties:
+        books:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookSummaryAgent'
+          description: ''
+      description: Agent variant of ListBooksResponse — each book summary carries its own `links`.
+    BookSummary:
+      title: BookSummary
+      type: object
+      properties:
+        bookId:
+          type: string
+          description: An internal identifier, separate from the ISBN, that identifies the book within the inventory
+        isbn:
+          type: string
+          description: The ISBN of the book
+        title:
+          type: string
+          description: The book title, e.g. A Practical Approach to API Design
+        authors:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookAuthor'
+          description: ''
+      description: Summarizes a book that is stocked by the book store.
+    BookSummaryAgent:
+      title: BookSummaryAgent
+      allOf:
+      - $ref: '#/components/schemas/BookSummary'
+      - type: object
+        properties:
+          links:
+            allOf:
+            - $ref: '#/components/schemas/Links'
+            - description: >
+                Always populated with `viewDetails` → ViewBookDetails. Unconditional —
+                every book in a list/search result affords viewing its own details.
+    BookDetails:
+      title: BookDetails
+      type: object
+      properties:
+        bookId:
+          type: string
+          description: An internal identifier, separate from the ISBN, that identifies the book within the inventory
+        isbn:
+          type: string
+          description: The ISBN of the book
+        title:
+          type: string
+          description: The book title, e.g. A Practical Approach to API Design
+        description:
+          type: string
+          description: A description of the book in plain text format
+        authors:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookAuthor'
+          description: ''
+      description: Details about a book that is stocked by the book store.
+    BookDetailsAgent:
+      title: BookDetailsAgent
+      allOf:
+      - $ref: '#/components/schemas/BookDetails'
+      - type: object
+        properties:
+          links:
+            allOf:
+            - $ref: '#/components/schemas/Links'
+            - description: >
+                `addToCart` → AddBookToCart is always present (creates a cart if none
+                exists yet). `viewAuthor` → getAuthorDetails joins it only when
+                `authors` is non-empty.
+    BookDetailsHuman:
+      title: BookDetailsHuman
+      allOf:
+      - $ref: '#/components/schemas/BookDetails'
+      - type: object
+        properties:
+          suggestedAction:
+            allOf:
+            - $ref: '#/components/schemas/SuggestedAction'
+            - description: 'Always "Add to cart" → AddBookToCart.'
+    BookAuthor:
+      title: BookAuthor
+      type: object
+      properties:
+        authorId:
+          type: string
+          description: An internal identifier that references the author
+        fullName:
+          type: string
+          description: The full name of the author, e.g. D. Keith Casey
+      description: Represents a single author for a book. Since a book may have more than one author, books will contain an array of BookAuthors.
+    CartItem:
+      title: CartItem
+      type: object
+      properties:
+        cartItemId:
+          type: string
+          description: An internal identifier for the cart item inside the cart
+        bookId:
+          type: string
+          description: The book that is being referenced within the order
+        title:
+          type: string
+          description: The book title, e.g. A Practical Approach to API Design
+        quantity:
+          minimum: 1
+          type: integer
+          description: The number of copies of the book requested
+          format: int32
+      description: Captures a book with the quantity desired in a cart.
+    NewCart:
+      title: NewCart
+      required:
+      - bookId
+      - quantity
+      type: object
+      properties:
+        bookId:
+          type: string
+          description: The book that is being added to the cart
+        quantity:
+          minimum: 1
+          type: integer
+          description: The number of copies of the book to be added to the cart
+          format: int32
+      description: Creates a new cart with the initial cart item added
+    NewCartItem:
+      title: NewCartItem
+      required:
+      - bookId
+      - quantity
+      type: object
+      properties:
+        bookId:
+          type: string
+          description: The book that is being added to the cart
+        quantity:
+          minimum: 1
+          type: integer
+          description: The number of copies of the book to be added to the cart
+          format: int32
+      description: Specifies a book and quantity to add to a cart
+    ModifyCartItem:
+      title: ModifyCartItem
+      required:
+      - quantity
+      type: object
+      properties:
+        quantity:
+          minimum: 1
+          type: integer
+          description: The number of copies of the book to adjust the cart item to
+          format: int32
+      description: Modifies an existing cart item's quantity
+    CartDetails:
+      title: CartDetails
+      type: object
+      properties:
+        cartId:
+          type: string
+          description: An internal identifier for the cart
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+          description: ''
+        totalCostInCents:
+          minimum: 0
+          type: integer
+          description: The total cost of the cart
+          format: int32
+        cartStatus:
+          $ref: '#/components/schemas/CartStatus'
+      description: Contains the full list of books and quantities contained within the cart, along with the total cost of the cart
+    CartDetailsAgent:
+      title: CartDetailsAgent
+      allOf:
+      - $ref: '#/components/schemas/CartDetails'
+      - type: object
+        properties:
+          links:
+            allOf:
+            - $ref: '#/components/schemas/Links'
+            - description: >
+                Keyed on `cartStatus` and whether `items` is empty:
+                `Active` + empty → `addItem`. `Active` + non-empty → `addItem`,
+                `removeItem`, `modifyItem`, `clearCart`, `checkout`. `Converted` →
+                `viewOrder` only. `Abandoned` → empty (no rels at all).
+    CartDetailsHuman:
+      title: CartDetailsHuman
+      allOf:
+      - $ref: '#/components/schemas/CartDetails'
+      - type: object
+        properties:
+          suggestedAction:
+            allOf:
+            - $ref: '#/components/schemas/SuggestedAction'
+            - description: >
+                Keyed on `cartStatus` and whether `items` is empty: `Active` + empty →
+                "Keep browsing" → ListBooks. `Active` + non-empty → "Checkout" →
+                CreateNewOrder. `Converted` → "View your order" → ViewOrderDetails.
+                `Abandoned` → absent, no suggestion defined for this state.
+    NewOrder:
+      title: NewOrder
+      required:
+      - cartId
+      type: object
+      properties:
+        cartId:
+          type: string
+          description: The cart to convert to an order
+      description: Creates a new order using the existing cart
+    NewOrderPayment:
+      title: NewOrderPayment
+      required:
+      - creditCardNumber
+      - ccv
+      - nameOnCard
+      - amountInCents
+      type: object
+      properties:
+        creditCardNumber:
+          type: string
+          description: The credit card number
+        ccv:
+          type: string
+          description: The credit card verification number
+        nameOnCard:
+          type: string
+          description: The name on the credit card, as it appears
+        amountInCents:
+          minimum: 1
+          type: integer
+          description: The amount to apply to the payment, in cents
+          format: int32
+      description: Captures the payment details for an order
+    OrderDetails:
+      title: OrderDetails
+      type: object
+      properties:
+        orderId:
+          type: string
+          description: An internal identifier that references the order
+        orderStatus:
+          $ref: '#/components/schemas/OrderStatus'
+        totalCostInCents:
+          minimum: 0
+          type: integer
+          description: The total cost of the order
+          format: int32
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+          description: ''
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderPaymentDetails'
+          description: ''
+      description: Contains the full list of books and quantities contained within the order, along with the total cost of the order.
+    OrderDetailsAgent:
+      title: OrderDetailsAgent
+      allOf:
+      - $ref: '#/components/schemas/OrderDetails'
+      - type: object
+        properties:
+          links:
+            allOf:
+            - $ref: '#/components/schemas/Links'
+            - description: >
+                Keyed on `orderStatus`: `New` → `submitPayment`, `cancelOrder`. `Paid` →
+                `cancelOrder`, `viewOrder`. `Preparing`/`Prepared` → `cancelOrder`,
+                `viewOrder`. `Shipped` → `viewOrder` only (self) — `cancelOrder` is
+                dropped once the order has left the warehouse, per the CancelOrder
+                operation's own constraint. `Received`/`Cancelled` → `viewOrder` only
+                (self); terminal states.
+    OrderDetailsHuman:
+      title: OrderDetailsHuman
+      allOf:
+      - $ref: '#/components/schemas/OrderDetails'
+      - type: object
+        properties:
+          suggestedAction:
+            allOf:
+            - $ref: '#/components/schemas/SuggestedAction'
+            - description: >
+                Keyed on `orderStatus`: `New` → "Pay now" → SubmitPaymentDetailsForOrder.
+                `Paid` → "Track your order" → ViewOrderDetails. `Preparing`/`Prepared` →
+                absent — cancellation is a support action, not the customer's primary
+                next step, so nothing is nudged. `Shipped` → "Track shipment" → external
+                carrier tracking, out of scope of this API. `Received` → "Browse new
+                arrivals" → ListBooks. `Cancelled` → "Start a new order" → ListBooks.
+    OrderPaymentDetails:
+      title: OrderPaymentDetails
+      type: object
+      properties:
+        orderPaymentId:
+          type: string
+          description: An internal identifier that references the payment for an order
+        creditCardLastFourDigits:
+          type: string
+          description: The last four digits of the credit card number
+        paymentStatus:
+          $ref: '#/components/schemas/PaymentStatus'
+        amountInCents:
+          type: integer
+          description: The amount applied to the payment, in cents, or 0 if the payment failed
+          format: int32
+      description: Summarizes the payment details for an order.
+    OrderPaymentDetailsAgent:
+      title: OrderPaymentDetailsAgent
+      allOf:
+      - $ref: '#/components/schemas/OrderPaymentDetails'
+      - type: object
+        properties:
+          links:
+            allOf:
+            - $ref: '#/components/schemas/Links'
+            - description: >
+                Surfaces the resulting *order's* next steps, not the payment resource's
+                own — the affordance table gates this on `paymentStatus` (of this
+                payment) together with the order's resulting `orderStatus`:
+                `paymentStatus = Failed` (order stays `New`) → `retryPayment`,
+                `cancelOrder`. `paymentStatus = Success` (order becomes `Paid`) →
+                `cancelOrder`, `viewOrder`.
+    OrderPaymentDetailsHuman:
+      title: OrderPaymentDetailsHuman
+      allOf:
+      - $ref: '#/components/schemas/OrderPaymentDetails'
+      - type: object
+        properties:
+          suggestedAction:
+            allOf:
+            - $ref: '#/components/schemas/SuggestedAction'
+            - description: >
+                `paymentStatus = Failed` → "Try a different card" →
+                SubmitPaymentDetailsForOrder. `paymentStatus = Success` → "Track your
+                order" → ViewOrderDetails.
+    CartStatus:
+      title: CartStatus
+      enum:
+      - Active
+      - Converted
+      - Abandoned
+      type: string
+      description: The current status of the cart
+    OrderStatus:
+      title: OrderStatus
+      enum:
+      - New
+      - Paid
+      - Preparing
+      - Prepared
+      - Shipped
+      - Received
+      - Cancelled
+      type: string
+      description: The current status of the order
+    PaymentStatus:
+      title: PaymentStatus
+      enum:
+      - Success
+      - Failed
+      type: string
+      description: Indicates if the credit card payment was successful or failed

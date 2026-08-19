@@ -81,6 +81,28 @@ Notes on reading the table:
   but a bad thing to nudge a customer toward, so it's omitted from `suggestedAction`
   entirely.
 
+## Applied to Design
+
+The table above isn't just documentation — it's applied back onto the Design-phase
+spec in [Order-Creation-API-REST.afford.oas3.yaml](Order-Creation-API-REST.afford.oas3.yaml),
+a copy of
+[3a-design-rest/Order-Creation-API-REST.oas3.yaml](../3a-design-rest/Order-Creation-API-REST.oas3.yaml)
+with Afford's decisions applied. No paths or operationIds changed. What did:
+
+- Every schema that used to describe its hypermedia links only in prose
+  (`"...the following hypermedia links are offered..."`) now carries a real `links`
+  property (agent) or `suggestedAction` property (human), with a `description` that
+  states exactly which rels/labels apply for which resource state — traceable
+  1:1 back to the rows above.
+- Every response that returns an affordance-bearing resource now content-negotiates
+  on `Accept`: `application/vnd.bookstore.agent+json` vs.
+  `application/vnd.bookstore.human+json`. This is the piece the table alone doesn't
+  settle — OAS can't shrink a schema conditionally by caller identity, so something
+  the request carries has to select the shape. Media type was picked here because
+  content negotiation already exists for exactly this; a custom header or query
+  param would work as well but isn't standard REST practice for representation
+  selection.
+
 ## Representation examples
 
 Two representations of the same `Order`, same underlying state (`status = Paid`),
